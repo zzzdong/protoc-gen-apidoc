@@ -121,9 +121,9 @@ func getCompactComment(comment *protogen.CommentSet) string {
 		line := strings.Trim(line, "/ \t\r\n")
 		newLines = append(newLines, line)
 	}
-	c := strings.Join(newLines, "")
+	c := strings.Join(newLines, " ")
 
 	c += strings.Trim(comment.Trailing.String(), "/ \t\r\n")
 
-	return text
+	return c
 }
