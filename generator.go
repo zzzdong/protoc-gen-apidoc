@@ -98,8 +98,8 @@ func parseMethod(m *protogen.Method) *MethodDef {
 
 func printMessage(g *protogen.GeneratedFile, message *protogen.Message) {
 	// table header
-	g.P("| 字段        | 类型           | 描述  |")
-	g.P("| ------------- |:-------------:| -----|")
+	g.P("| 字段        | 类型        | 描述  |")
+	g.P("| ----------- |:----------:| -----|")
 
 	for _, field := range message.Fields {
 		printField(g, field)
@@ -113,13 +113,17 @@ func printField(g *protogen.GeneratedFile, field *protogen.Field) {
 
 func getCompactComment(comment *protogen.CommentSet) string {
 	text := strings.Trim(comment.Leading.String(), "/ \t\r\n")
-	if len(text) > 0 {
-		text += "\t"
-	}
-	text += strings.Trim(comment.Trailing.String(), "/ \t\r\n")
 
-	text = strings.ReplaceAll(text, "\r", "")
-	text = strings.ReplaceAll(text, "\n", "")
+	lines := strings.Split(text, "\n")
+
+	newLines := make([]string, 0)
+	for _, line := range lines {
+		line := strings.Trim(line, "/ \t\r\n")
+		newLines = append(newLines, line)
+	}
+	c := strings.Join(newLines, "")
+
+	c += strings.Trim(comment.Trailing.String(), "/ \t\r\n")
 
 	return text
 }
