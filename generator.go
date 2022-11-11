@@ -108,15 +108,18 @@ func printMessage(g *protogen.GeneratedFile, message *protogen.Message) {
 }
 
 func printField(g *protogen.GeneratedFile, field *protogen.Field) {
-	g.P("|", field.Desc.Name(), "|", field.Desc.Kind().String(), "|", getComment(&field.Comments), "|")
+	g.P("|", field.Desc.Name(), "|", field.Desc.Kind().String(), "|", getCompactComment(&field.Comments), "|")
 }
 
-func getComment(comment *protogen.CommentSet) string {
+func getCompactComment(comment *protogen.CommentSet) string {
 	text := strings.Trim(comment.Leading.String(), "/ \t\r\n")
 	if len(text) > 0 {
 		text += "\t"
 	}
 	text += strings.Trim(comment.Trailing.String(), "/ \t\r\n")
+
+	text = strings.ReplaceAll(text, "\r", "")
+	text = strings.ReplaceAll(text, "\n", "")
 
 	return text
 }
