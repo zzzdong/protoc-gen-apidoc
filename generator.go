@@ -138,7 +138,7 @@ func printField(g *protogen.GeneratedFile, indent int, name string, field *proto
 	row := fmt.Sprintf("|%s|%s|%s|", fieldName, kind, getCompactComment(&field.Comments))
 	g.P(row)
 
-	if field.Message != nil {
+	if field.Message != nil && field.Message.Desc.FullName() != field.Parent.Desc.FullName() {
 		printSubMessage(g, indent+1, field.Desc.JSONName(), field.Message)
 	}
 }
@@ -146,7 +146,6 @@ func printField(g *protogen.GeneratedFile, indent int, name string, field *proto
 func printSubMessage(g *protogen.GeneratedFile, indent int, name string, message *protogen.Message) {
 	for _, field := range message.Fields {
 		printField(g, indent, name, field)
-		// g.P("|", "\t", name, ".", field.Desc.JSONName(), "|", field.Desc.Kind().String(), "|", getCompactComment(&field.Comments), "|")
 	}
 
 }
@@ -189,13 +188,20 @@ func messageToInterface(message *protogen.Message) interface{} {
 	for _, field := range message.Fields {
 		var fi interface{}
 
-		if field.Desc.IsList() {
-			item := fieldToInterface(field)
-			fi = []interface{}{item}
-		} else if field.Desc.IsMap() {
+		if field.Message != nil && field.Message.Desc.FullName() == message.Desc.FullName() {
 			fi = map[string]interface{}{}
+			if field.Desc.IsList() {
+				fi = []interface{}{}
+			}
 		} else {
-			fi = fieldToInterface(field)
+			if field.Desc.IsList() {
+				item := fieldToInterface(field)
+				fi = []interface{}{item}
+			} else if field.Desc.IsMap() {
+				fi = map[string]interface{}{}
+			} else {
+				fi = fieldToInterface(field)
+			}
 		}
 
 		st[string(field.Desc.JSONName())] = fi
