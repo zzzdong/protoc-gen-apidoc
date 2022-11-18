@@ -120,32 +120,37 @@ func printMessage(g *protogen.GeneratedFile, message *protogen.Message) {
 	g.P("| ----------- |:----------:| -----|")
 
 	for _, field := range message.Fields {
-		printField(g, 0, "", field)
+		printField(g, 0, field)
 	}
 }
 
-func printField(g *protogen.GeneratedFile, indent int, name string, field *protogen.Field) {
+func printField(g *protogen.GeneratedFile, indent int, field *protogen.Field) {
 	fieldName := field.Desc.JSONName()
 	if indent > 0 {
-		fieldName = fmt.Sprintf("%s %s.%s", strings.Repeat(">", indent), name, fieldName)
+		fieldName = fmt.Sprintf("%s%s.%s", strings.Repeat("-", indent), field.Parent.Desc.Name(), fieldName)
 	}
 
 	kind := field.Desc.Kind().String()
+	if field.Message != nil {
+		kind = string(field.Message.Desc.Name())
+	}
 	if field.Desc.IsList() {
-		kind = "array"
+		kind = "[]" + kind
+	} else if field.Message != nil {
+		kind = kind + "{}"
 	}
 
 	row := fmt.Sprintf("|%s|%s|%s|", fieldName, kind, getCompactComment(&field.Comments))
 	g.P(row)
 
 	if field.Message != nil && field.Message.Desc.FullName() != field.Parent.Desc.FullName() {
-		printSubMessage(g, indent+1, field.Desc.JSONName(), field.Message)
+		printSubMessage(g, indent+1, field.Message)
 	}
 }
 
-func printSubMessage(g *protogen.GeneratedFile, indent int, name string, message *protogen.Message) {
+func printSubMessage(g *protogen.GeneratedFile, indent int, message *protogen.Message) {
 	for _, field := range message.Fields {
-		printField(g, indent, name, field)
+		printField(g, indent, field)
 	}
 
 }
