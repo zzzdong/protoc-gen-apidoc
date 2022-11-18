@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -36,12 +39,28 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) (*protogen.Generate
 
 		// path info
 		g.P("`", method.httpMethod, " ", method.httpPath, "`")
+		g.P()
 
 		g.P("### Request")
+		g.P()
 		printMessage(g, method.Input)
-		g.P("### Response payload")
-		printMessage(g, method.Output)
+		g.P()
 
+		if method.httpMethod != "GET" {
+			g.P("#### JSON")
+			g.P()
+			printMessageJson(g, method.Input)
+			g.P()
+		}
+
+		g.P("### Response payload")
+		g.P()
+		printMessage(g, method.Output)
+		g.P()
+		g.P("#### JSON")
+		g.P()
+		printWrappedMessageJson(g, method.Output)
+		g.P()
 	}
 
 	return g, nil
@@ -57,7 +76,6 @@ func getAllMethods(file *protogen.File) []*MethodDef {
 			}
 
 			methods = append(methods, parseMethod(method))
-
 		}
 	}
 
@@ -102,13 +120,111 @@ func printMessage(g *protogen.GeneratedFile, message *protogen.Message) {
 	g.P("| ----------- |:----------:| -----|")
 
 	for _, field := range message.Fields {
-		printField(g, field)
+		printField(g, 0, "", field)
+	}
+}
+
+func printField(g *protogen.GeneratedFile, indent int, name string, field *protogen.Field) {
+	fieldName := field.Desc.JSONName()
+	if indent > 0 {
+		fieldName = fmt.Sprintf("%s %s.%s", strings.Repeat(">", indent), name, fieldName)
+	}
+
+	kind := field.Desc.Kind().String()
+	if field.Desc.IsList() {
+		kind = "array"
+	}
+
+	row := fmt.Sprintf("|%s|%s|%s|", fieldName, kind, getCompactComment(&field.Comments))
+	g.P(row)
+
+	if field.Message != nil {
+		printSubMessage(g, indent+1, field.Desc.JSONName(), field.Message)
+	}
+}
+
+func printSubMessage(g *protogen.GeneratedFile, indent int, name string, message *protogen.Message) {
+	for _, field := range message.Fields {
+		printField(g, indent, name, field)
+		// g.P("|", "\t", name, ".", field.Desc.JSONName(), "|", field.Desc.Kind().String(), "|", getCompactComment(&field.Comments), "|")
 	}
 
 }
 
-func printField(g *protogen.GeneratedFile, field *protogen.Field) {
-	g.P("|", field.Desc.Name(), "|", field.Desc.Kind().String(), "|", getCompactComment(&field.Comments), "|")
+func printWrappedMessageJson(g *protogen.GeneratedFile, message *protogen.Message) {
+	msg := messageToInterface(message)
+
+	type WrappedResp struct {
+		ErrCode int32       `json:"errCode"`
+		ErrMsg  string      `json:"errMsg"`
+		Data    interface{} `json:"data"`
+	}
+
+	resp := WrappedResp{
+		ErrCode: 0,
+		ErrMsg:  "ok",
+		Data:    msg,
+	}
+
+	bs, _ := json.MarshalIndent(&resp, "", "\t")
+
+	g.P("```json")
+	g.P(string(bs))
+	g.P("```")
+}
+
+func printMessageJson(g *protogen.GeneratedFile, message *protogen.Message) {
+	msg := messageToInterface(message)
+
+	bs, _ := json.MarshalIndent(msg, "", "\t")
+
+	g.P("```json")
+	g.P(string(bs))
+	g.P("```")
+}
+
+func messageToInterface(message *protogen.Message) interface{} {
+	st := make(map[string]interface{})
+
+	for _, field := range message.Fields {
+		var fi interface{}
+
+		if field.Desc.IsList() {
+			item := fieldToInterface(field)
+			fi = []interface{}{item}
+		} else if field.Desc.IsMap() {
+			fi = map[string]interface{}{}
+		} else {
+			fi = fieldToInterface(field)
+		}
+
+		st[string(field.Desc.JSONName())] = fi
+	}
+
+	return st
+}
+
+func fieldToInterface(field *protogen.Field) interface{} {
+	switch field.Desc.Kind() {
+	case protoreflect.BoolKind:
+		return false
+
+	case protoreflect.EnumKind:
+		return 0
+
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Uint32Kind, protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Uint64Kind:
+		return int(0)
+
+	case protoreflect.Sfixed32Kind, protoreflect.Fixed32Kind, protoreflect.FloatKind, protoreflect.Sfixed64Kind, protoreflect.Fixed64Kind, protoreflect.DoubleKind:
+		return float32(0.0)
+
+	case protoreflect.StringKind, protoreflect.BytesKind:
+		return string("")
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		return messageToInterface(field.Message)
+	}
+
+	return map[string]interface{}{}
 }
 
 func getCompactComment(comment *protogen.CommentSet) string {
