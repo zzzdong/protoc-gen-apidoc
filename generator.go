@@ -47,6 +47,11 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) (*protogen.Generate
 		g.P()
 
 		if method.httpMethod != "GET" {
+			g.P("```ts")
+			printMessageDefinition(g, method.Input)
+			g.P("```")
+			g.P()
+
 			g.P("#### JSON")
 			g.P()
 			printMessageJson(g, method.Input)
@@ -57,10 +62,17 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) (*protogen.Generate
 		g.P()
 		printMessage(g, method.Output)
 		g.P()
+
+		g.P("```ts")
+		printMessageDefinition(g, method.Input)
+		g.P("```")
+		g.P()
+
 		g.P("#### JSON")
 		g.P()
 		printWrappedMessageJson(g, method.Output)
 		g.P()
+
 	}
 
 	return g, nil
@@ -112,6 +124,50 @@ func parseMethod(m *protogen.Method) *MethodDef {
 	method := &MethodDef{Method: m, httpMethod: httpMethod, httpPath: httpPath}
 
 	return method
+}
+
+func printMessageDefinition(g *protogen.GeneratedFile, message *protogen.Message) {
+	g.P("interface ", message.Desc.Name(), " {")
+
+	for _, field := range message.Fields {
+		printFieldDefinition(g, field)
+	}
+
+	g.P("}")
+}
+
+func printFieldDefinition(g *protogen.GeneratedFile, field *protogen.Field) {
+	fieldName := field.Desc.JSONName()
+
+	kind := field.Desc.Kind().String()
+
+	switch field.Desc.Kind() {
+	case protoreflect.BoolKind:
+		kind = "boolean"
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		kind = "number"
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		kind = "number"
+	case protoreflect.StringKind:
+		kind = "string"
+	case protoreflect.BytesKind:
+		kind = "string" // TODO: bytes
+	case protoreflect.MessageKind:
+		if field.Message != nil {
+			kind = string(field.Message.Desc.Name())
+		}
+	}
+
+	if field.Message != nil {
+		kind = string(field.Message.Desc.Name())
+	}
+	if field.Desc.IsList() {
+		kind = "[]" + kind
+	} else if field.Message != nil {
+		kind = kind + "{}"
+	}
+
+	g.P(fmt.Sprintf("\t%s: %s,", fieldName, kind))
 }
 
 func printMessage(g *protogen.GeneratedFile, message *protogen.Message) {
